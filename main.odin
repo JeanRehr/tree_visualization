@@ -5,7 +5,9 @@ import "core:strconv"
 import "core:strings"
 import "core:unicode/utf8"
 
-MAX_INPUT_CHARS: int : 4
+MAX_INPUT_CHARS : int : 4
+w_width         : i32 : 1600
+w_height        : i32 : 900
 
 draw_node :: proc(node: ^Node, mouse_pos: rl.Vector2) -> ^Node {
     if node == nil {
@@ -69,6 +71,54 @@ update_positions :: proc(node: ^Node, x: i32, y: i32, x_offset: i32, y_offset: i
     }
 }
 
+get_input_box :: proc(box: Input_Box, tree: Avltree) {
+    tree := tree
+    box := box
+    if rl.CheckCollisionPointRec(rl.GetMousePosition(), box.rect) do box.mouse_on_text = true
+        else do box.mouse_on_text = false
+
+        // Capture input numbers on insert box
+        if box.mouse_on_text {
+            rl.SetMouseCursor(rl.MouseCursor.IBEAM)
+            box.key = rl.GetCharPressed()
+
+            for box.key > 0 {
+                // 45 is utf-8 for '-', 48 to 57 are numbers from 0 to 9
+                if (box.key == 45 || (box.key >= 48) && (box.key <= 57)) && box.char_count < MAX_INPUT_CHARS {
+                    box.keys[box.char_count] = box.key
+                    box.char_count += 1
+                }
+
+                box.key = rl.GetCharPressed();
+            }
+
+            if rl.IsKeyPressed(rl.KeyboardKey.BACKSPACE) {
+                box.char_count -= 1
+                if box.char_count < 0 do box.char_count = 0
+                box.keys[box.char_count] = 0
+            }
+
+            box.text = utf8.runes_to_string(box.keys[:])
+            box.ctext = strings.clone_to_cstring(box.text)
+
+            if rl.IsKeyPressed(rl.KeyboardKey.ENTER) || rl.IsKeyPressed(rl.KeyboardKey.KP_ENTER) {
+                data: int = strconv.atoi(box.text)
+                insert(&tree, data, w_width/2, 200, 25)
+                box.text = ""
+                box.ctext = strings.clone_to_cstring(box.text)
+                for i := 0; i < MAX_INPUT_CHARS; i += 1{
+                    box.keys[i] = 0
+                }
+                box.char_count = 0
+            }
+
+            box.frames_counter += 1
+        } else {
+            rl.SetMouseCursor(rl.MouseCursor.DEFAULT)
+            box.frames_counter = 0
+        }
+}
+
 draw_input_box :: proc(box: Input_Box) {
     rl.DrawRectangleRec(box.rect, rl.LIGHTGRAY)
     if box.mouse_on_text {
@@ -101,9 +151,6 @@ Input_Box :: struct {
 }
 
 main :: proc() {
-    w_width : i32 : 1600
-    w_height: i32 : 900
-
     tree: Avltree
     rl.InitWindow(w_width, w_height, "AVL Tree Visualization")
     defer {
@@ -136,45 +183,7 @@ main :: proc() {
         else do insert_box.mouse_on_text = false
 
         // Capture input numbers on insert box
-        if insert_box.mouse_on_text {
-            rl.SetMouseCursor(rl.MouseCursor.IBEAM)
-            insert_box.key = rl.GetCharPressed()
-
-            for insert_box.key > 0 {
-                // 45 is utf-8 for '-', 48 to 57 are numbers from 0 to 9
-                if (insert_box.key == 45 || (insert_box.key >= 48) && (insert_box.key <= 57)) && insert_box.char_count < MAX_INPUT_CHARS {
-                    insert_box.keys[insert_box.char_count] = insert_box.key
-                    insert_box.char_count += 1
-                }
-
-                insert_box.key = rl.GetCharPressed();
-            }
-
-            if rl.IsKeyPressed(rl.KeyboardKey.BACKSPACE) {
-                insert_box.char_count -= 1
-                if insert_box.char_count < 0 do insert_box.char_count = 0
-                insert_box.keys[insert_box.char_count] = 0
-            }
-
-            insert_box.text = utf8.runes_to_string(insert_box.keys[:])
-            insert_box.ctext = strings.clone_to_cstring(insert_box.text)
-
-            if rl.IsKeyPressed(rl.KeyboardKey.ENTER) || rl.IsKeyPressed(rl.KeyboardKey.KP_ENTER) {
-                data: int = strconv.atoi(insert_box.text)
-                insert(&tree, data, w_width/2, 200, 25)
-                insert_box.text = ""
-                insert_box.ctext = strings.clone_to_cstring(insert_box.text)
-                for i := 0; i < MAX_INPUT_CHARS; i += 1{
-                    insert_box.keys[i] = 0
-                }
-                insert_box.char_count = 0
-            }
-
-            insert_box.frames_counter += 1
-        } else {
-            rl.SetMouseCursor(rl.MouseCursor.DEFAULT)
-            insert_box.frames_counter = 0
-        }
+        get_input_box(insert_box, tree)
         // End capture input numbers on box
 
         // Flagged for deletion
@@ -240,41 +249,11 @@ main :: proc() {
         rl.DrawText("Place mouse on the input box and enter numbers.", 10, w_height - 90, 20, rl.MAROON)
         
         // Draw Insert Rectangle
-        rl.DrawRectangleRec(insert_box.rect, rl.LIGHTGRAY)
-        if insert_box.mouse_on_text {
-            rl.DrawRectangleLines(i32(insert_box.rect.x), i32(insert_box.rect.y), i32(insert_box.rect.width), i32(insert_box.rect.height), rl.RED)
-        } else {
-            rl.DrawRectangleLines(i32(insert_box.rect.x), i32(insert_box.rect.y), i32(insert_box.rect.width), i32(insert_box.rect.height), rl.DARKGRAY)
-        }
-        rl.DrawText(insert_box.ctext, i32(insert_box.rect.x + 5), i32(insert_box.rect.y + 8), 40, rl.MAROON)
-
-        if insert_box.mouse_on_text {
-            if insert_box.char_count < MAX_INPUT_CHARS {
-                // Draw blinking underscore char
-                if ((insert_box.frames_counter/20)%2) == 0 {
-                    rl.DrawText("_", i32(insert_box.rect.x) + 8 + rl.MeasureText(insert_box.ctext, 40), i32(insert_box.rect.y) + 12, 40, rl.MAROON)
-                }
-            }
-        }
+        draw_input_box(insert_box)
         // End Draw Insert Rectangle
 
         // Draw Insert Rectangle
-        rl.DrawRectangleRec(delete_box.rect, rl.LIGHTGRAY)
-        if delete_box.mouse_on_text {
-            rl.DrawRectangleLines(i32(delete_box.rect.x), i32(delete_box.rect.y), i32(delete_box.rect.width), i32(insert_box.rect.height), rl.RED)
-        } else {
-            rl.DrawRectangleLines(i32(delete_box.rect.x), i32(delete_box.rect.y), i32(delete_box.rect.width), i32(delete_box.rect.height), rl.DARKGRAY)
-        }
-        rl.DrawText(delete_box.ctext, i32(delete_box.rect.x + 5), i32(delete_box.rect.y + 8), 40, rl.MAROON)
-
-        if delete_box.mouse_on_text {
-            if delete_box.char_count < MAX_INPUT_CHARS {
-                // Draw blinking underscore char
-                if ((insert_box.frames_counter/20)%2) == 0 {
-                    rl.DrawText("_", i32(delete_box.rect.x) + 8 + rl.MeasureText(delete_box.ctext, 40), i32(delete_box.rect.y) + 12, 40, rl.MAROON)
-                }
-            }
-        }
+        draw_input_box(delete_box)
         // End Draw Insert Rectangle
 
         // Draw Nodes
