@@ -4,8 +4,10 @@ import rl "vendor:raylib"
 import "core:strconv"
 import "core:strings"
 import "core:unicode/utf8"
+import "core:mem"
+import "core:fmt"
 
-MAX_INPUT_CHARS : int : 5
+MAX_INPUT_CHARS : int : 4
 w_width         : i32 : 1600
 w_height        : i32 : 900
 
@@ -29,8 +31,7 @@ draw_node :: proc(node: ^Node, mouse_pos: rl.Vector2) -> ^Node {
     rl.DrawCircleLines(node.posx, node.posy, node.radius, color)
     buf: [4]byte
     node_data_string := strconv.itoa(buf[:], node.data)
-    node_data_cstring := strings.clone_to_cstring(node_data_string)
-    rl.DrawText(node_data_cstring, node.posx - i32((node.radius / 2)), node.posy - i32((node.radius / 2)), 20, color)
+    rl.DrawText(strings.clone_to_cstring(node_data_string), node.posx - i32((node.radius / 2)), node.posy - i32((node.radius / 2)), 20, color)
     
     // Lines
     if node.left != nil {
@@ -79,7 +80,6 @@ Input :: enum {
 Input_Box :: struct {
     rect: rl.Rectangle,
     text: string,
-    ctext: cstring,
     key: rune,
     keys: [MAX_INPUT_CHARS]rune,
     char_count: int,
@@ -118,20 +118,18 @@ get_input_box :: proc(box: ^Input_Box, tree: ^Avltree) -> (int, Input) {
         }
 
         box.text = utf8.runes_to_string(box.keys[:])
-        box.ctext = strings.clone_to_cstring(box.text)
+
+        box.frames_counter += 1
 
         if rl.IsKeyPressed(rl.KeyboardKey.ENTER) || rl.IsKeyPressed(rl.KeyboardKey.KP_ENTER) {
             data = strconv.atoi(box.text)
             box.text = ""
-            box.ctext = strings.clone_to_cstring(box.text)
-            for i := 0; i < MAX_INPUT_CHARS; i += 1{
+            for i := 0; i < MAX_INPUT_CHARS; i += 1 {
                 box.keys[i] = 0
             }
             box.char_count = 0
             return data, .Some
         }
-
-        box.frames_counter += 1
     } else {
         rl.SetMouseCursor(rl.MouseCursor.DEFAULT)
         box.frames_counter = 0
@@ -148,13 +146,13 @@ draw_input_box :: proc(box: ^Input_Box) {
     } else {
         rl.DrawRectangleLines(i32(box.rect.x), i32(box.rect.y), i32(box.rect.width), i32(box.rect.height), rl.DARKGRAY)
     }
-    rl.DrawText(box.ctext, i32(box.rect.x + 5), i32(box.rect.y + 8), 40, rl.MAROON)
+    rl.DrawText(strings.clone_to_cstring(box.text), i32(box.rect.x + 5), i32(box.rect.y + 8), 40, rl.MAROON)
 
     if box.mouse_on_text {
         if box.char_count < MAX_INPUT_CHARS {
             // Draw blinking underscore char
             if ((box.frames_counter/20)%2) == 0 {
-                rl.DrawText("_", i32(box.rect.x) + 8 + rl.MeasureText(box.ctext, 40), i32(box.rect.y) + 12, 40, rl.MAROON)
+                rl.DrawText("_", i32(box.rect.x) + 8 + rl.MeasureText(strings.clone_to_cstring(box.text), 40), i32(box.rect.y) + 12, 40, rl.MAROON)
             }
         }
     }
