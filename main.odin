@@ -5,7 +5,7 @@ import "core:strconv"
 import "core:strings"
 import "core:unicode/utf8"
 
-MAX_INPUT_CHARS : int : 4
+MAX_INPUT_CHARS : int : 5
 w_width         : i32 : 1600
 w_height        : i32 : 900
 
@@ -71,55 +71,77 @@ update_positions :: proc(node: ^Node, x: i32, y: i32, x_offset: i32, y_offset: i
     }
 }
 
-get_input_box :: proc(box: ^Input_Box, tree: ^Avltree) {
+Input :: enum {
+    Some,
+    None,
+}
+
+Input_Box :: struct {
+    rect: rl.Rectangle,
+    text: string,
+    ctext: cstring,
+    key: rune,
+    keys: [MAX_INPUT_CHARS]rune,
+    char_count: int,
+    mouse_on_text: bool,
+    color: rl.Color,
+    frames_counter: int,
+    title: cstring
+}
+
+get_input_box :: proc(box: ^Input_Box, tree: ^Avltree) -> (int, Input) {
     tree := tree
     box := box
+    data: int
     if rl.CheckCollisionPointRec(rl.GetMousePosition(), box.rect) do box.mouse_on_text = true
-        else do box.mouse_on_text = false
+    else do box.mouse_on_text = false
 
-        // Capture input numbers on insert box
-        if box.mouse_on_text {
-            rl.SetMouseCursor(rl.MouseCursor.IBEAM)
-            box.key = rl.GetCharPressed()
+    // Capture input numbers on insert box
+    if box.mouse_on_text {
+        rl.SetMouseCursor(rl.MouseCursor.IBEAM)
+        box.key = rl.GetCharPressed()
 
-            for box.key > 0 {
-                // 45 is utf-8 for '-', 48 to 57 are numbers from 0 to 9
-                if (box.key == 45 || (box.key >= 48) && (box.key <= 57)) && box.char_count < MAX_INPUT_CHARS {
-                    box.keys[box.char_count] = box.key
-                    box.char_count += 1
-                }
-
-                box.key = rl.GetCharPressed();
+        for box.key > 0 {
+            // 45 is utf-8 for '-', 48 to 57 are numbers from 0 to 9
+            if (box.key == 45 || (box.key >= 48) && (box.key <= 57)) && box.char_count < MAX_INPUT_CHARS {
+            box.keys[box.char_count] = box.key
+                box.char_count += 1
             }
 
-            if rl.IsKeyPressed(rl.KeyboardKey.BACKSPACE) {
-                box.char_count -= 1
-                if box.char_count < 0 do box.char_count = 0
-                box.keys[box.char_count] = 0
-            }
-
-            box.text = utf8.runes_to_string(box.keys[:])
-            box.ctext = strings.clone_to_cstring(box.text)
-
-            if rl.IsKeyPressed(rl.KeyboardKey.ENTER) || rl.IsKeyPressed(rl.KeyboardKey.KP_ENTER) {
-                data: int = strconv.atoi(box.text)
-                insert(tree, data, w_width/2, 200, 25)
-                box.text = ""
-                box.ctext = strings.clone_to_cstring(box.text)
-                for i := 0; i < MAX_INPUT_CHARS; i += 1{
-                    box.keys[i] = 0
-                }
-                box.char_count = 0
-            }
-
-            box.frames_counter += 1
-        } else {
-            rl.SetMouseCursor(rl.MouseCursor.DEFAULT)
-            box.frames_counter = 0
+            box.key = rl.GetCharPressed();
         }
+
+        if rl.IsKeyPressed(rl.KeyboardKey.BACKSPACE) {
+            box.char_count -= 1
+            if box.char_count < 0 do box.char_count = 0
+            box.keys[box.char_count] = 0
+        }
+
+        box.text = utf8.runes_to_string(box.keys[:])
+        box.ctext = strings.clone_to_cstring(box.text)
+
+        if rl.IsKeyPressed(rl.KeyboardKey.ENTER) || rl.IsKeyPressed(rl.KeyboardKey.KP_ENTER) {
+            data = strconv.atoi(box.text)
+            box.text = ""
+            box.ctext = strings.clone_to_cstring(box.text)
+            for i := 0; i < MAX_INPUT_CHARS; i += 1{
+                box.keys[i] = 0
+            }
+            box.char_count = 0
+            return data, .Some
+        }
+
+        box.frames_counter += 1
+    } else {
+        rl.SetMouseCursor(rl.MouseCursor.DEFAULT)
+        box.frames_counter = 0
+    }
+
+    return data, .None
 }
 
 draw_input_box :: proc(box: ^Input_Box) {
+    rl.DrawText(box.title, i32(box.rect.x), i32(box.rect.y) / 2 - 5, 25, rl.MAROON)
     rl.DrawRectangleRec(box.rect, rl.LIGHTGRAY)
     if box.mouse_on_text {
         rl.DrawRectangleLines(i32(box.rect.x), i32(box.rect.y), i32(box.rect.width), i32(box.rect.height), rl.RED)
@@ -138,18 +160,6 @@ draw_input_box :: proc(box: ^Input_Box) {
     }
 }
 
-Input_Box :: struct {
-    rect: rl.Rectangle,
-    text: string,
-    ctext: cstring,
-    key: rune,
-    keys: [MAX_INPUT_CHARS]rune,
-    char_count: int,
-    mouse_on_text: bool,
-    color: rl.Color,
-    frames_counter: int,
-}
-
 main :: proc() {
     tree: Avltree
     rl.InitWindow(w_width, w_height, "AVL Tree Visualization")
@@ -162,17 +172,23 @@ main :: proc() {
     camera.zoom = 1
 
     insert_box: Input_Box
-    insert_box.rect = {f32(w_width) - 110, 10, 100, 50 }
+    insert_box.rect = {f32(w_width) - 150, 40, 130, 50 }
     insert_box.color = rl.LIGHTGRAY
+    insert_box.title = "INSERT"
 
     delete_box: Input_Box
-    delete_box.rect = {10, 10, 100, 50 }
+    delete_box.rect = {20, 40, 130, 50 }
     delete_box.color = rl.LIGHTGRAY
+    delete_box.title = "DELETE"
 
     rl.SetTargetFPS(60);
 
     add_sum_num: int
     add_minus_num: int
+
+    height_offset_x: i32 = 1
+    added_offset_x: bool
+    previous_height: i32 = -1
 
     flagged_node: ^Node = nil
 
@@ -183,8 +199,12 @@ main :: proc() {
         else do insert_box.mouse_on_text = false
 
         // Capture input numbers on box
-        get_input_box(&insert_box, &tree)
-        get_input_box(&delete_box, &tree)
+        nums_ins, nums_del: int
+        input: Input
+        nums_ins, input = get_input_box(&insert_box, &tree)
+        if (input == .Some) do insert(&tree, nums_ins, w_width/2, 200, 25)
+        nums_del, input = get_input_box(&delete_box, &tree)
+        if (input == .Some) do remove(&tree, nums_del)
         // End capture input numbers on box
 
         // Flagged for deletion
@@ -237,6 +257,30 @@ main :: proc() {
             camera.zoom = rl.Clamp(camera.zoom*scaleFactor, .125, 64);
         }
 
+        // Add an offset to X so nodes are separated when too much
+        if tree.root != nil {
+            current_height:i32 = i32(tree.root.height)
+
+            if (current_height >= 7 && (previous_height == -1 || previous_height < 7)) {
+                height_offset_x += 1
+                added_offset_x = true
+            } else if added_offset_x && current_height < 7 {
+                // Reset if height goes below 7 after previously adding offset
+                added_offset_x = false
+                height_offset_x -= 1
+            }
+
+            // Check subsequent changes in height
+            if current_height != previous_height {
+                if current_height >= 7 {
+                    height_offset_x += 1 + (current_height - 7) // Increase increment for taller trees
+                } else {
+                    height_offset_x = 1 // Reset if height is below 7
+                }
+                previous_height = current_height
+            }
+        }
+
         flagged_node = nil
         //----------------------------------------------------------------------------------
 
@@ -245,23 +289,21 @@ main :: proc() {
         rl.BeginDrawing()
         rl.ClearBackground(rl.BLACK)
 
-        rl.DrawText("Place mouse on a node, left click to delete, right click to delete the subtree.", 10, w_height - 30, 20, rl.MAROON)
-        rl.DrawText("Press A and S to insert incrementally, D to reset the increments.", 10, w_height - 60, 20, rl.MAROON)
-        rl.DrawText("Place mouse on the input box and enter numbers.", 10, w_height - 90, 20, rl.MAROON)
+        rl.DrawText("Mouse left button drag to move, wheel to zoom.", 10, w_height - 30, 20, rl.MAROON)
+        rl.DrawText("Place mouse on node, left click to delete, right click to delete the subtree.", 10, w_height - 60, 20, rl.MAROON)
+        rl.DrawText("Press A and S to insert incrementally, D to reset the increments.", 10, w_height - 90, 20, rl.MAROON)
+        rl.DrawText("Place mouse on the input box and enter numbers.", 10, w_height - 120, 20, rl.MAROON)
         
-        // Draw Insert Rectangle
+        // Draw Insert and Delete Rectangle
         draw_input_box(&insert_box)
-        // End Draw Insert Rectangle
-
-        // Draw Insert Rectangle
         draw_input_box(&delete_box)
-        // End Draw Insert Rectangle
+        // End Draw Insert and Delete Rectangle
 
         // Draw Nodes
         rl.BeginMode2D(camera)
         flagged_node = draw_node(tree.root, game_mouse_pos)
 
-        update_positions(tree.root, w_width/2, 50, 400, 100)
+        update_positions(tree.root, w_width/2, 50, 400 * height_offset_x, 100)
 
         rl.EndMode2D()
         // End Draw Nodes
