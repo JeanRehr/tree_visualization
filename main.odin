@@ -71,7 +71,7 @@ update_positions :: proc(node: ^Node, x: i32, y: i32, x_offset: i32, y_offset: i
     }
 }
 
-get_input_box :: proc(box: Input_Box, tree: Avltree) {
+get_input_box :: proc(box: ^Input_Box, tree: ^Avltree) {
     tree := tree
     box := box
     if rl.CheckCollisionPointRec(rl.GetMousePosition(), box.rect) do box.mouse_on_text = true
@@ -103,7 +103,7 @@ get_input_box :: proc(box: Input_Box, tree: Avltree) {
 
             if rl.IsKeyPressed(rl.KeyboardKey.ENTER) || rl.IsKeyPressed(rl.KeyboardKey.KP_ENTER) {
                 data: int = strconv.atoi(box.text)
-                insert(&tree, data, w_width/2, 200, 25)
+                insert(tree, data, w_width/2, 200, 25)
                 box.text = ""
                 box.ctext = strings.clone_to_cstring(box.text)
                 for i := 0; i < MAX_INPUT_CHARS; i += 1{
@@ -119,7 +119,7 @@ get_input_box :: proc(box: Input_Box, tree: Avltree) {
         }
 }
 
-draw_input_box :: proc(box: Input_Box) {
+draw_input_box :: proc(box: ^Input_Box) {
     rl.DrawRectangleRec(box.rect, rl.LIGHTGRAY)
     if box.mouse_on_text {
         rl.DrawRectangleLines(i32(box.rect.x), i32(box.rect.y), i32(box.rect.width), i32(box.rect.height), rl.RED)
@@ -183,7 +183,7 @@ main :: proc() {
         else do insert_box.mouse_on_text = false
 
         // Capture input numbers on insert box
-        get_input_box(insert_box, tree)
+        get_input_box(&insert_box, &tree)
         // End capture input numbers on box
 
         // Flagged for deletion
@@ -249,11 +249,11 @@ main :: proc() {
         rl.DrawText("Place mouse on the input box and enter numbers.", 10, w_height - 90, 20, rl.MAROON)
         
         // Draw Insert Rectangle
-        draw_input_box(insert_box)
+        draw_input_box(&insert_box)
         // End Draw Insert Rectangle
 
         // Draw Insert Rectangle
-        draw_input_box(delete_box)
+        draw_input_box(&delete_box)
         // End Draw Insert Rectangle
 
         // Draw Nodes
