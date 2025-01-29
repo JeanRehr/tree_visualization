@@ -182,8 +182,9 @@ main :: proc() {
         if rl.CheckCollisionPointRec(rl.GetMousePosition(), insert_box.rect) do insert_box.mouse_on_text = true
         else do insert_box.mouse_on_text = false
 
-        // Capture input numbers on insert box
+        // Capture input numbers on box
         get_input_box(&insert_box, &tree)
+        get_input_box(&delete_box, &tree)
         // End capture input numbers on box
 
         // Flagged for deletion
