@@ -7,7 +7,7 @@ import "core:unicode/utf8"
 import "core:mem"
 import "core:fmt"
 
-MAX_INPUT_CHARS : int : 4
+MAX_INPUT_CHARS : int : 7
 w_width         : i32 : 1600
 w_height        : i32 : 900
 
@@ -41,7 +41,9 @@ draw_node :: proc(node: ^Node, mouse_pos: rl.Vector2) -> ^Node {
     }
 
     rl.DrawCircleLines(node.posx, node.posy, node.radius, color)
-    buf: [4]byte
+    // Allow more bytes if increasing the MAX_INPUT_CHARS number
+    // buf will receive an int type, which is 4 to 8 bytes in size, from the get_input_box fn
+    buf: [8]byte
     node_data_string := strconv.itoa(buf[:], node.data)
     rl.DrawText(strings.clone_to_cstring(node_data_string), node.posx - i32((node.radius / 2)), node.posy - i32((node.radius / 2)), 20, color)
     
@@ -87,10 +89,6 @@ update_positions :: proc(node: ^Node, x: int, y: int, x_offset: int, y_offset: i
 get_input_box :: proc(box: ^Input_Box, tree: ^Avltree) -> (result: int, ok: bool) {
     tree := tree
     box := box
-    if rl.CheckCollisionPointRec(rl.GetMousePosition(), box.rect) do box.mouse_on_text = true
-    else do box.mouse_on_text = false
-
-    // Capture input numbers on insert box
     if box.mouse_on_text {
         rl.SetMouseCursor(rl.MouseCursor.IBEAM)
         box.key = rl.GetCharPressed()
@@ -98,7 +96,7 @@ get_input_box :: proc(box: ^Input_Box, tree: ^Avltree) -> (result: int, ok: bool
         for box.key > 0 {
             // 45 is utf-8 for '-', 48 to 57 are numbers from 0 to 9
             if (box.key == 45 || (box.key >= 48) && (box.key <= 57)) && box.char_count < MAX_INPUT_CHARS {
-            box.keys[box.char_count] = box.key
+                box.keys[box.char_count] = box.key
                 box.char_count += 1
             }
 
@@ -113,20 +111,25 @@ get_input_box :: proc(box: ^Input_Box, tree: ^Avltree) -> (result: int, ok: bool
 
         box.text = utf8.runes_to_string(box.keys[:])
 
-        box.frames_counter += 1
-
         if rl.IsKeyPressed(rl.KeyboardKey.ENTER) || rl.IsKeyPressed(rl.KeyboardKey.KP_ENTER) {
             result = strconv.atoi(box.text)
             box.text = ""
-            for i := 0; i < MAX_INPUT_CHARS; i += 1 {
+            box.char_count = 0
+            for i := 0; i < len(box.keys); i += 1 {
+                if box.keys[i] == 45 && i != 0 { // minus sign in the middle of a number
+                    ok = false
+                }
                 box.keys[i] = 0
             }
-            box.char_count = 0
+
+            if !ok {
+                return result, false
+            }
+
             return result, true
         }
     } else {
         rl.SetMouseCursor(rl.MouseCursor.DEFAULT)
-        box.frames_counter = 0
     }
 
     return result, false
@@ -139,6 +142,7 @@ draw_input_box :: proc(box: ^Input_Box) {
         rl.DrawRectangleLines(i32(box.rect.x), i32(box.rect.y), i32(box.rect.width), i32(box.rect.height), rl.RED)
     } else {
         rl.DrawRectangleLines(i32(box.rect.x), i32(box.rect.y), i32(box.rect.width), i32(box.rect.height), box.color)
+        box.frames_counter = 0
     }
     rl.DrawText(strings.clone_to_cstring(box.text), i32(box.rect.x + 5), i32(box.rect.y + 8), 40, rl.MAROON)
 
@@ -149,6 +153,7 @@ draw_input_box :: proc(box: ^Input_Box) {
                 rl.DrawText("_", i32(box.rect.x) + 8 + rl.MeasureText(strings.clone_to_cstring(box.text), 40), i32(box.rect.y) + 12, 40, rl.MAROON)
             }
         }
+        box.frames_counter += 1
     }
 }
 
@@ -164,12 +169,12 @@ main :: proc() {
     camera.zoom = 1
 
     insert_box: Input_Box
-    insert_box.rect = {f32(w_width) - 150, 40, 130, 50 }
+    insert_box.rect = {f32(w_width) - 195, 40, 175, 50 }
     insert_box.color = rl.LIGHTGRAY
     insert_box.title = "INSERT"
 
     delete_box: Input_Box
-    delete_box.rect = {20, 40, 130, 50 }
+    delete_box.rect = {20, 40, 175, 50 }
     delete_box.color = rl.LIGHTGRAY
     delete_box.title = "DELETE"
 
@@ -188,15 +193,23 @@ main :: proc() {
         //----------------------------------------------------------------------------------
         if rl.CheckCollisionPointRec(rl.GetMousePosition(), insert_box.rect) do insert_box.mouse_on_text = true
         else do insert_box.mouse_on_text = false
+        if rl.CheckCollisionPointRec(rl.GetMousePosition(), delete_box.rect) do delete_box.mouse_on_text = true
+        else do delete_box.mouse_on_text = false
 
         // Capture input numbers on box
-        nums_ins, nums_del: int
-        ok: bool
-        nums_ins, ok = get_input_box(&insert_box, &tree)
-        if ok do insert(&tree, nums_ins, w_width/2, 200, 25)
+        if insert_box.mouse_on_text {
+            nums_ins: int
+            ok: bool
+            nums_ins, ok = get_input_box(&insert_box, &tree)
+            if ok do insert(&tree, nums_ins, w_width/2, 200, 25)
+        }
 
-        nums_del, ok = get_input_box(&delete_box, &tree)
-        if ok do remove(&tree, nums_del)
+        if delete_box.mouse_on_text {
+            nums_del: int
+            ok: bool
+            nums_del, ok = get_input_box(&delete_box, &tree)
+            if ok do remove(&tree, nums_del)
+        }
         // End capture input numbers on box
 
         // Flagged for deletion
