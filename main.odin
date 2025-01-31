@@ -90,7 +90,6 @@ get_input_box :: proc(box: ^Input_Box, tree: ^Avltree) -> (result: int, ok: bool
     tree := tree
     box := box
     if box.mouse_on_text {
-        rl.SetMouseCursor(rl.MouseCursor.IBEAM)
         box.key = rl.GetCharPressed()
 
         for box.key > 0 {
@@ -112,9 +111,10 @@ get_input_box :: proc(box: ^Input_Box, tree: ^Avltree) -> (result: int, ok: bool
         box.text = utf8.runes_to_string(box.keys[:])
 
         if rl.IsKeyPressed(rl.KeyboardKey.ENTER) || rl.IsKeyPressed(rl.KeyboardKey.KP_ENTER) {
+            ok = true
             result = strconv.atoi(box.text)
-            box.text = ""
             box.char_count = 0
+            box.text = ""
             for i := 0; i < len(box.keys); i += 1 {
                 if box.keys[i] == 45 && i != 0 { // minus sign in the middle of a number
                     ok = false
@@ -128,8 +128,6 @@ get_input_box :: proc(box: ^Input_Box, tree: ^Avltree) -> (result: int, ok: bool
 
             return result, true
         }
-    } else {
-        rl.SetMouseCursor(rl.MouseCursor.DEFAULT)
     }
 
     return result, false
@@ -195,9 +193,11 @@ main :: proc() {
         else do insert_box.mouse_on_text = false
         if rl.CheckCollisionPointRec(rl.GetMousePosition(), delete_box.rect) do delete_box.mouse_on_text = true
         else do delete_box.mouse_on_text = false
+        rl.SetMouseCursor(rl.MouseCursor.DEFAULT)
 
         // Capture input numbers on box
         if insert_box.mouse_on_text {
+            rl.SetMouseCursor(rl.MouseCursor.IBEAM)
             nums_ins: int
             ok: bool
             nums_ins, ok = get_input_box(&insert_box, &tree)
@@ -205,6 +205,7 @@ main :: proc() {
         }
 
         if delete_box.mouse_on_text {
+            rl.SetMouseCursor(rl.MouseCursor.IBEAM)
             nums_del: int
             ok: bool
             nums_del, ok = get_input_box(&delete_box, &tree)
@@ -223,17 +224,15 @@ main :: proc() {
         ////
 
         // Input keyboard
-        if !insert_box.mouse_on_text {
-            if rl.IsKeyPressed(rl.KeyboardKey.A) {
-                insert(&tree, add_sum_num, w_width/2, 200, 25)
-                add_sum_num += 1
-            } else if rl.IsKeyPressed(rl.KeyboardKey.S) {
-                insert(&tree, add_minus_num, w_width/2, 200, 25)
-                add_minus_num -= 1
-            } else if rl.IsKeyPressed(rl.KeyboardKey.D) {
-                add_sum_num = 0
-                add_minus_num = 0
-            }
+        if rl.IsKeyPressed(rl.KeyboardKey.A) {
+            insert(&tree, add_sum_num, w_width/2, 200, 25)
+            add_sum_num += 1
+        } else if rl.IsKeyPressed(rl.KeyboardKey.S) {
+            insert(&tree, add_minus_num, w_width/2, 200, 25)
+            add_minus_num -= 1
+        } else if rl.IsKeyPressed(rl.KeyboardKey.D) {
+            add_sum_num = 0
+            add_minus_num = 0
         }
         ////
 
