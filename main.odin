@@ -11,6 +11,18 @@ MAX_INPUT_CHARS : int : 4
 w_width         : i32 : 1600
 w_height        : i32 : 900
 
+Input_Box :: struct {
+    rect: rl.Rectangle,
+    text: string,
+    key: rune,
+    keys: [MAX_INPUT_CHARS]rune,
+    char_count: int,
+    mouse_on_text: bool,
+    color: rl.Color,
+    frames_counter: int,
+    title: cstring
+}
+
 draw_node :: proc(node: ^Node, mouse_pos: rl.Vector2) -> ^Node {
     if node == nil {
         return nil
@@ -55,13 +67,13 @@ draw_node :: proc(node: ^Node, mouse_pos: rl.Vector2) -> ^Node {
     return nil
 }
 
-update_positions :: proc(node: ^Node, x: i32, y: i32, x_offset: i32, y_offset: i32) {
+update_positions :: proc(node: ^Node, x: int, y: int, x_offset: int, y_offset: int) {
     if node == nil {
         return
     }
 
-    node.posx = x
-    node.posy = y
+    node.posx = i32(x)
+    node.posy = i32(y)
 
     if node.left != nil {
         update_positions(node.left, x - x_offset, y + y_offset, x_offset / 2, y_offset)
@@ -72,27 +84,9 @@ update_positions :: proc(node: ^Node, x: i32, y: i32, x_offset: i32, y_offset: i
     }
 }
 
-Input :: enum {
-    Some,
-    None,
-}
-
-Input_Box :: struct {
-    rect: rl.Rectangle,
-    text: string,
-    key: rune,
-    keys: [MAX_INPUT_CHARS]rune,
-    char_count: int,
-    mouse_on_text: bool,
-    color: rl.Color,
-    frames_counter: int,
-    title: cstring
-}
-
-get_input_box :: proc(box: ^Input_Box, tree: ^Avltree) -> (int, Input) {
+get_input_box :: proc(box: ^Input_Box, tree: ^Avltree) -> (result: int, ok: bool) {
     tree := tree
     box := box
-    data: int
     if rl.CheckCollisionPointRec(rl.GetMousePosition(), box.rect) do box.mouse_on_text = true
     else do box.mouse_on_text = false
 
@@ -122,20 +116,20 @@ get_input_box :: proc(box: ^Input_Box, tree: ^Avltree) -> (int, Input) {
         box.frames_counter += 1
 
         if rl.IsKeyPressed(rl.KeyboardKey.ENTER) || rl.IsKeyPressed(rl.KeyboardKey.KP_ENTER) {
-            data = strconv.atoi(box.text)
+            result = strconv.atoi(box.text)
             box.text = ""
             for i := 0; i < MAX_INPUT_CHARS; i += 1 {
                 box.keys[i] = 0
             }
             box.char_count = 0
-            return data, .Some
+            return result, true
         }
     } else {
         rl.SetMouseCursor(rl.MouseCursor.DEFAULT)
         box.frames_counter = 0
     }
 
-    return data, .None
+    return result, false
 }
 
 draw_input_box :: proc(box: ^Input_Box) {
@@ -144,7 +138,7 @@ draw_input_box :: proc(box: ^Input_Box) {
     if box.mouse_on_text {
         rl.DrawRectangleLines(i32(box.rect.x), i32(box.rect.y), i32(box.rect.width), i32(box.rect.height), rl.RED)
     } else {
-        rl.DrawRectangleLines(i32(box.rect.x), i32(box.rect.y), i32(box.rect.width), i32(box.rect.height), rl.DARKGRAY)
+        rl.DrawRectangleLines(i32(box.rect.x), i32(box.rect.y), i32(box.rect.width), i32(box.rect.height), box.color)
     }
     rl.DrawText(strings.clone_to_cstring(box.text), i32(box.rect.x + 5), i32(box.rect.y + 8), 40, rl.MAROON)
 
@@ -184,9 +178,8 @@ main :: proc() {
     add_sum_num: int
     add_minus_num: int
 
-    height_offset_x: i32 = 1
-    added_offset_x: bool
-    previous_height: i32 = -1
+    height_offset_x: int = 1
+    previous_height: int = -1
 
     flagged_node: ^Node = nil
 
@@ -198,11 +191,12 @@ main :: proc() {
 
         // Capture input numbers on box
         nums_ins, nums_del: int
-        input: Input
-        nums_ins, input = get_input_box(&insert_box, &tree)
-        if (input == .Some) do insert(&tree, nums_ins, w_width/2, 200, 25)
-        nums_del, input = get_input_box(&delete_box, &tree)
-        if (input == .Some) do remove(&tree, nums_del)
+        ok: bool
+        nums_ins, ok = get_input_box(&insert_box, &tree)
+        if ok do insert(&tree, nums_ins, w_width/2, 200, 25)
+
+        nums_del, ok = get_input_box(&delete_box, &tree)
+        if ok do remove(&tree, nums_del)
         // End capture input numbers on box
 
         // Flagged for deletion
@@ -228,8 +222,9 @@ main :: proc() {
                 add_minus_num = 0
             }
         }
-        ///
+        ////
 
+        // 2D moving camera
         // Translate based on mouse left click
         if rl.IsMouseButtonDown(rl.MouseButton.LEFT) {
             delta: rl.Vector2 = rl.GetMouseDelta()
@@ -254,10 +249,12 @@ main :: proc() {
             if (wheel < 0) do scaleFactor = 1/scaleFactor;
             camera.zoom = rl.Clamp(camera.zoom*scaleFactor, .125, 64);
         }
+        // End 2D moving camera
 
         // Add an offset to X so nodes are separated when too much
         if tree.root != nil {
-            current_height:i32 = i32(tree.root.height)
+            added_offset_x: bool
+            current_height: int = int(tree.root.height)
 
             if (current_height >= 7 && (previous_height == -1 || previous_height < 7)) {
                 height_offset_x += 1
@@ -278,6 +275,7 @@ main :: proc() {
                 previous_height = current_height
             }
         }
+        // End add an offset
 
         flagged_node = nil
         //----------------------------------------------------------------------------------
@@ -298,10 +296,10 @@ main :: proc() {
         // End Draw Insert and Delete Rectangle
 
         // Draw Nodes
-        rl.BeginMode2D(camera)
-        flagged_node = draw_node(tree.root, game_mouse_pos)
+        rl.BeginMode2D(camera) // Only things between this and EndMode2D will move
 
-        update_positions(tree.root, w_width/2, 50, 400 * height_offset_x, 100)
+        flagged_node = draw_node(tree.root, game_mouse_pos)
+        update_positions(tree.root, int(w_width/2), 50, 400 * height_offset_x, 100)
 
         rl.EndMode2D()
         // End Draw Nodes
