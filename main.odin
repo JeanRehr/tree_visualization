@@ -110,14 +110,17 @@ get_input_box :: proc(box: ^Input_Box, tree: ^Avltree) -> (result: int, ok: bool
             box.keys[box.char_count] = 0
         }
 
-        keys_str := utf8.runes_to_string(box.keys[:])
-        //defer delete(keys_str)
-        box.text = keys_str
+        if box.text != "" {
+            delete(box.text) // free old string from memory 
+        }
+
+        box.text = utf8.runes_to_string(box.keys[:box.char_count]) // allocate new value
 
         if rl.IsKeyPressed(rl.KeyboardKey.ENTER) || rl.IsKeyPressed(rl.KeyboardKey.KP_ENTER) {
             ok = true
             result = strconv.atoi(box.text)
             box.char_count = 0
+            delete(box.text) // ensure memory of the string is cleared when pressing enter
             box.text = ""
             for i := 0; i < len(box.keys); i += 1 {
                 if box.keys[i] == 45 && i != 0 { // minus sign in the middle of a number
