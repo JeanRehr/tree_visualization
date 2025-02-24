@@ -45,7 +45,9 @@ draw_node :: proc(node: ^Node, mouse_pos: rl.Vector2) -> ^Node {
     // buf will receive an int type, which is 4 to 8 bytes in size, from the get_input_box fn
     buf: [8]byte
     node_data_string := strconv.itoa(buf[:], node.data)
-    rl.DrawText(strings.clone_to_cstring(node_data_string), node.posx - i32((node.radius / 2)), node.posy - i32((node.radius / 2)), 20, color)
+    cstr_node_data := strings.clone_to_cstring(node_data_string)
+    defer delete(cstr_node_data)
+    rl.DrawText(cstr_node_data, node.posx - i32((node.radius / 2)), node.posy - i32((node.radius / 2)), 20, color)
     
     // Lines
     if node.left != nil {
@@ -108,7 +110,9 @@ get_input_box :: proc(box: ^Input_Box, tree: ^Avltree) -> (result: int, ok: bool
             box.keys[box.char_count] = 0
         }
 
-        box.text = utf8.runes_to_string(box.keys[:])
+        keys_str := utf8.runes_to_string(box.keys[:])
+        //defer delete(keys_str)
+        box.text = keys_str
 
         if rl.IsKeyPressed(rl.KeyboardKey.ENTER) || rl.IsKeyPressed(rl.KeyboardKey.KP_ENTER) {
             ok = true
@@ -142,13 +146,15 @@ draw_input_box :: proc(box: ^Input_Box) {
         rl.DrawRectangleLines(i32(box.rect.x), i32(box.rect.y), i32(box.rect.width), i32(box.rect.height), box.color)
         box.frames_counter = 0
     }
-    rl.DrawText(strings.clone_to_cstring(box.text), i32(box.rect.x + 5), i32(box.rect.y + 8), 40, rl.MAROON)
+    cstr_box_text := strings.clone_to_cstring(box.text)
+    defer delete(cstr_box_text)
+    rl.DrawText(cstr_box_text, i32(box.rect.x + 5), i32(box.rect.y + 8), 40, rl.MAROON)
 
     if box.mouse_on_text {
         if box.char_count < MAX_INPUT_CHARS {
             // Draw blinking underscore char
             if ((box.frames_counter/20)%2) == 0 {
-                rl.DrawText("_", i32(box.rect.x) + 8 + rl.MeasureText(strings.clone_to_cstring(box.text), 40), i32(box.rect.y) + 12, 40, rl.MAROON)
+                rl.DrawText("_", i32(box.rect.x) + 8 + rl.MeasureText(cstr_box_text, 40), i32(box.rect.y) + 12, 40, rl.MAROON)
             }
         }
         box.frames_counter += 1
@@ -156,6 +162,26 @@ draw_input_box :: proc(box: ^Input_Box) {
 }
 
 main :: proc() {
+    track: mem.Tracking_Allocator
+		mem.tracking_allocator_init(&track, context.allocator)
+		context.allocator = mem.tracking_allocator(&track)
+
+		defer {
+			if len(track.allocation_map) > 0 {
+				fmt.eprintf("=== %v allocations not freed: ===\n", len(track.allocation_map))
+				for _, entry in track.allocation_map {
+					fmt.eprintf("- %v bytes @ %v\n", entry.size, entry.location)
+				}
+			}
+			if len(track.bad_free_array) > 0 {
+				fmt.eprintf("=== %v incorrect frees: ===\n", len(track.bad_free_array))
+				for entry in track.bad_free_array {
+					fmt.eprintf("- %p @ %v\n", entry.memory, entry.location)
+				}
+			}
+			mem.tracking_allocator_destroy(&track)
+		}
+
     tree: Avltree
     rl.InitWindow(w_width, w_height, "AVL Tree Visualization")
     defer {
@@ -179,7 +205,7 @@ main :: proc() {
     rl.SetTargetFPS(60);
 
     add_sum_num: int
-    add_minus_num: int
+    add_minus_num: int = -1
 
     height_offset_x: int = 1
     previous_height: int = -1
@@ -232,7 +258,7 @@ main :: proc() {
             add_minus_num -= 1
         } else if rl.IsKeyPressed(rl.KeyboardKey.D) {
             add_sum_num = 0
-            add_minus_num = 0
+            add_minus_num = -1
         }
         ////
 
@@ -263,7 +289,7 @@ main :: proc() {
         }
         // End 2D moving camera
 
-        // Add an offset to X so nodes are separated when too much
+        // Add an offset to X so nodes are separated when they get close to each other
         if tree.root != nil {
             added_offset_x: bool
             current_height: int = int(tree.root.height)
@@ -302,10 +328,8 @@ main :: proc() {
         rl.DrawText("Press A and S to insert incrementally, D to reset the increments.", 10, w_height - 90, 20, rl.MAROON)
         rl.DrawText("Place mouse on the input box and enter numbers.", 10, w_height - 120, 20, rl.MAROON)
         
-        // Draw Insert and Delete Rectangle
         draw_input_box(&insert_box)
         draw_input_box(&delete_box)
-        // End Draw Insert and Delete Rectangle
 
         // Draw Nodes
         rl.BeginMode2D(camera) // Only things between this and EndMode2D will move
