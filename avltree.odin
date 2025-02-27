@@ -65,8 +65,7 @@ _remove :: proc(node: ^Node, data: int) -> ^Node {
                 node = nil
             } else { // one child case
                 // dereferencing to access and copy the values, without trail ^, the literal pointers would be copied
-                // node to be "deleted" will be equal to either right or left
-                node^ = tmp^
+                node^ = tmp^ // node to be "deleted" will be equal to either right or left
             }
             free(tmp)
         } else { // two children case
@@ -123,7 +122,6 @@ free_tree :: proc(tree: ^Avltree) {
 
 free_subtree :: proc(node: ^Node) {
     if node != nil {
-        i: int = 1
         free_subtree(node.left)
         free_subtree(node.right)
         free(node)

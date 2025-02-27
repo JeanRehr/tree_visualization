@@ -59,6 +59,7 @@ draw_node :: proc(node: ^Node, mouse_pos: rl.Vector2) -> ^Node {
         }
     }
     
+    // Lines
     if node.right != nil {
         i: i32 = i32(node.radius)
         rl.DrawLine(node.posx + i, node.posy, node.right.posx, node.right.posy - i, color)
@@ -165,7 +166,7 @@ draw_input_box :: proc(box: ^Input_Box) {
 }
 
 main :: proc() {
-    track: mem.Tracking_Allocator
+    /*track: mem.Tracking_Allocator
 		mem.tracking_allocator_init(&track, context.allocator)
 		context.allocator = mem.tracking_allocator(&track)
 
@@ -183,7 +184,7 @@ main :: proc() {
 				}
 			}
 			mem.tracking_allocator_destroy(&track)
-		}
+		}*/
 
     tree: Avltree
     rl.InitWindow(w_width, w_height, "AVL Tree Visualization")
@@ -222,6 +223,7 @@ main :: proc() {
         else do insert_box.mouse_on_text = false
         if rl.CheckCollisionPointRec(rl.GetMousePosition(), delete_box.rect) do delete_box.mouse_on_text = true
         else do delete_box.mouse_on_text = false
+
         rl.SetMouseCursor(rl.MouseCursor.DEFAULT)
 
         // Capture input numbers on box
